@@ -14,8 +14,8 @@ if not credentials_info:
     raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set or is empty.")
 
 # 创建临时文件来存储 Google Cloud 凭证
-with tempfile.NamedTemporaryFile(delete=False) as temp_credentials_file:
-    temp_credentials_file.write(credentials_info.encode())
+with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.json') as temp_credentials_file:
+    temp_credentials_file.write(credentials_info)
     temp_credentials_path = temp_credentials_file.name
 
 # 使用临时凭证文件创建 BigQuery 客户端
