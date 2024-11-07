@@ -8,9 +8,18 @@ from office365.runtime.auth.user_credential import UserCredential
 from datetime import datetime
 from google.oauth2 import service_account
 
-# 从 GitHub Secrets 中获取 Google Cloud 凭证内容
-service_account_info = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-credentials = service_account.Credentials.from_service_account_info(service_account_info)
+# 从环境变量中获取 Google Cloud 凭证内容
+credentials_info = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+if not credentials_info:
+    raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set or is empty.")
+
+# 将 JSON 凭证内容加载为字典
+try:
+    service_account_info = json.loads(credentials_info)
+    credentials = service_account.Credentials.from_service_account_info(service_account_info)
+    print("[Ok] Successfully loaded Google Cloud credentials.")
+except json.JSONDecodeError as e:
+    raise ValueError("Failed to decode GOOGLE_APPLICATION_CREDENTIALS JSON. Please check the format.") from e
 
 # 设置 BigQuery 客户端
 client = bigquery.Client(credentials=credentials)
@@ -32,11 +41,14 @@ ctx = ClientContext(url).with_credentials(UserCredential(username, pw))
 
 # 下载并处理文件的函数
 def downloadFromOneDrive(file_path, file_url):
-    with open(file_path, "wb") as local_file:
-        ctx.web.get_file_by_server_relative_url(file_url).download(local_file).execute_query()
-    print(f"[Ok] file has been downloaded into: {file_path}")
+    try:
+        with open(file_path, "wb") as local_file:
+            ctx.web.get_file_by_server_relative_url(file_url).download(local_file).execute_query()
+        print(f"[Ok] File has been downloaded to: {file_path}")
+    except Exception as e:
+        print(f"[Error] Failed to download file from {file_url}. Error: {e}")
 
-# 临时文件夹，用于存储下载的文件和生成的CSV
+# 临时文件夹，用于存储下载的文件和生成的 CSV
 with tempfile.TemporaryDirectory() as temp_dir:
     df_list = []
     for file_url in file_urls:
@@ -44,10 +56,14 @@ with tempfile.TemporaryDirectory() as temp_dir:
         file_path = os.path.join(temp_dir, file_url.split('/')[-1])
         downloadFromOneDrive(file_path, file_url)
 
-        # 读取Excel文件
-        df = pd.read_excel(file_path, sheet_name=sheet_name, header=2)
-        print(f"[Ok] {file_path} loaded:")
-        print(df.head())  # 打印数据的前几行
+        # 读取 Excel 文件
+        try:
+            df = pd.read_excel(file_path, sheet_name=sheet_name, header=2)
+            print(f"[Ok] {file_path} loaded:")
+            print(df.head())  # 打印数据的前几行
+        except Exception as e:
+            print(f"[Error] Failed to load Excel file: {file_path}. Error: {e}")
+            continue
 
         # 数据清理
         df = df.iloc[:, :16]  # 选择前16列
@@ -57,10 +73,10 @@ with tempfile.TemporaryDirectory() as temp_dir:
         df['billing_date'] = df['billing_date'].dt.strftime('%Y-%m-%d')
         df_list.append(df)
 
-    # 合并DataFrame
+    # 合并 DataFrame
     combined_df = pd.concat(df_list, ignore_index=True)
 
-    # 保存合并后的数据为CSV文件
+    # 保存合并后的数据为 CSV 文件
     csv_file_path = os.path.join(temp_dir, 'lumens_combined_data.csv')
     combined_df.to_csv(csv_file_path, index=False)
     print(f"[Ok] Data successfully combined and saved to {csv_file_path}")
@@ -85,10 +101,17 @@ with tempfile.TemporaryDirectory() as temp_dir:
     )
 
     # 上传到 BigQuery
-    with open(csv_file_path, 'rb') as csv_file:
-        load_job = client.load_table_from_file(csv_file, table_ref, job_config=job_config)
-    load_job.result()
+    try:
+        with open(csv_file_path, 'rb') as csv_file:
+            load_job = client.load_table_from_file(csv_file, table_ref, job_config=job_config)
+        load_job.result()  # 等待作业完成
+        print(f"[Ok] Data loaded to BigQuery table {dataset_id}.{table_id}")
+    except Exception as e:
+        print(f"[Error] Failed to load data into BigQuery. Error: {e}")
 
     # 验证数据加载
-    destination_table = client.get_table(table_ref)
-    print(f"[Ok] Loaded {destination_table.num_rows} rows into {dataset_id}.{table_id}.")
+    try:
+        destination_table = client.get_table(table_ref)
+        print(f"[Ok] Loaded {destination_table.num_rows} rows into {dataset_id}.{table_id}.")
+    except Exception as e:
+        print(f"[Error] Could not retrieve table information. Error: {e}")
