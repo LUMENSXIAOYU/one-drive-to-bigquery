@@ -31,8 +31,7 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      # Step 4: Debug - Check Environment Variable Content (Optional)
-      # 输出环境变量部分内容，确保 GOOGLE_APPLICATION_CREDENTIALS 已正确加载
+      # Step 4: Debug - Check GOOGLE_APPLICATION_CREDENTIALS Content
       - name: Check GOOGLE_APPLICATION_CREDENTIALS content
         run: |
           if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
@@ -40,7 +39,7 @@ jobs:
             exit 1
           else
             echo "GOOGLE_APPLICATION_CREDENTIALS is set."
-            echo "${GOOGLE_APPLICATION_CREDENTIALS}" | head -c 100  # 仅输出前100字符以防泄露
+            echo "${GOOGLE_APPLICATION_CREDENTIALS}" | head -c 100  # 仅输出前100字符以确认加载
           fi
 
       # Step 5: Run Python script
