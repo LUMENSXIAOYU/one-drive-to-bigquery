@@ -19,8 +19,13 @@ with tempfile.NamedTemporaryFile(delete=False) as temp_credentials_file:
     temp_credentials_path = temp_credentials_file.name
 
 # 使用临时凭证文件创建 BigQuery 客户端
-credentials = service_account.Credentials.from_service_account_file(temp_credentials_path)
-client = bigquery.Client(credentials=credentials)
+try:
+    credentials = service_account.Credentials.from_service_account_file(temp_credentials_path)
+    client = bigquery.Client(credentials=credentials)
+    print("[Ok] Google Cloud credentials loaded successfully.")
+finally:
+    # 删除临时文件以确保安全
+    os.remove(temp_credentials_path)
 
 # OneDrive 用户名和密码
 username = "XIAOYU.ZENG@lumens.sg"
@@ -38,7 +43,7 @@ sheet_name = "Billing Record (CRM)"  # 指定工作表的名称
 ctx = ClientContext(url).with_credentials(UserCredential(username, pw))
 
 # 下载并处理文件的函数
-def downloadFromOneDrive(file_path, file_url):
+def download_from_one_drive(file_path, file_url):
     try:
         with open(file_path, "wb") as local_file:
             ctx.web.get_file_by_server_relative_url(file_url).download(local_file).execute_query()
@@ -52,7 +57,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     for file_url in file_urls:
         # 定义文件路径
         file_path = os.path.join(temp_dir, file_url.split('/')[-1])
-        downloadFromOneDrive(file_path, file_url)
+        download_from_one_drive(file_path, file_url)
 
         # 读取 Excel 文件
         try:
@@ -87,9 +92,9 @@ with tempfile.TemporaryDirectory() as temp_dir:
     # 删除表（如果存在）
     try:
         client.delete_table(table_ref)
-        print(f"Deleted table {dataset_id}.{table_id}.")
+        print(f"[Ok] Deleted table {dataset_id}.{table_id}.")
     except Exception as e:
-        print(f"[Error] Table {dataset_id}.{table_id} does not exist or could not be deleted. Error: {e}")
+        print(f"[Warning] Table {dataset_id}.{table_id} does not exist or could not be deleted. Error: {e}")
 
     # 配置加载作业
     job_config = bigquery.LoadJobConfig(
@@ -113,6 +118,3 @@ with tempfile.TemporaryDirectory() as temp_dir:
         print(f"[Ok] Loaded {destination_table.num_rows} rows into {dataset_id}.{table_id}.")
     except Exception as e:
         print(f"[Error] Could not retrieve table information. Error: {e}")
-
-# 删除临时凭证文件以确保安全
-os.remove(temp_credentials_path)
