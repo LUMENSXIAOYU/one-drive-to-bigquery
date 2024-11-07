@@ -8,20 +8,18 @@ from office365.runtime.auth.user_credential import UserCredential
 from datetime import datetime
 from google.oauth2 import service_account
 
-# 从环境变量中获取 Google Cloud 凭证内容
+# 将 Google Cloud 凭证环境变量写入临时文件
 credentials_info = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 if not credentials_info:
     raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set or is empty.")
 
-# 将 JSON 凭证内容加载为字典
-try:
-    service_account_info = json.loads(credentials_info)
-    credentials = service_account.Credentials.from_service_account_info(service_account_info)
-    print("[Ok] Successfully loaded Google Cloud credentials.")
-except json.JSONDecodeError as e:
-    raise ValueError("Failed to decode GOOGLE_APPLICATION_CREDENTIALS JSON. Please check the format.") from e
+# 创建临时文件来存储 Google Cloud 凭证
+with tempfile.NamedTemporaryFile(delete=False) as temp_credentials_file:
+    temp_credentials_file.write(credentials_info.encode())
+    temp_credentials_path = temp_credentials_file.name
 
-# 设置 BigQuery 客户端
+# 使用临时凭证文件创建 BigQuery 客户端
+credentials = service_account.Credentials.from_service_account_file(temp_credentials_path)
 client = bigquery.Client(credentials=credentials)
 
 # OneDrive 用户名和密码
@@ -115,3 +113,6 @@ with tempfile.TemporaryDirectory() as temp_dir:
         print(f"[Ok] Loaded {destination_table.num_rows} rows into {dataset_id}.{table_id}.")
     except Exception as e:
         print(f"[Error] Could not retrieve table information. Error: {e}")
+
+# 删除临时凭证文件以确保安全
+os.remove(temp_credentials_path)
