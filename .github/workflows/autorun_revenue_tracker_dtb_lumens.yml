@@ -26,6 +26,11 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Run Python script
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: python revenue_tracker_dtb_lumens_combine.py
+
       # Step 4: Run your Python script
       - name: Run Python Script
         run: |
